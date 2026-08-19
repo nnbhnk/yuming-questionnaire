@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>アンケート</title>
+</head>
+
+<body>
+
+<h1>アンケート</h1>
+
+<form action="ここにFormspreeのURL" method="POST">
+
+    <p>Q1. この企画を知っていますか？</p>
+
+    <label>
+        <input type="radio" name="knowledge" value="知っている">
+        知っている
+    </label>
+
+    <label>
+        <input type="radio" name="knowledge" value="知らない">
+        知らない
+    </label>
+
+    <p>Q2. 感想を教えてください。</p>
+
+    <textarea name="comment" rows="5" cols="40"></textarea>
+
+    <br><br>
+
+    <button type="submit">送信</button>
+
+</form>
+
+</body>
+</html>
