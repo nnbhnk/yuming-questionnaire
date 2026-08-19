@@ -1,37 +1,331 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <title>アンケート</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>バンドメンバー企画 "OFF MODE"　24時間 究極の休日スケジュール入力フォーム</title>
+  <style>
+    :root{
+      --bg:#f7f7fb;
+      --card:#ffffff;
+      --accent:#6b5b95;
+      --muted:#666;
+    }
+    body{
+      margin:0;
+      font-family:sans-serif;
+      background:var(--bg);
+      color:#111;
+    }
+    .wrap{
+      max-width:980px;
+      margin:28px auto;
+      padding:18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 420px;
+      gap:18px;
+      margin-top:18px;
+    }
+    .card{
+      background:var(--card);
+      border-radius:12px;
+      padding:14px;
+      box-shadow:0 6px 18px rgba(20,20,40,0.06);
+    }
+    label{
+      font-size:14px;
+      color:var(--muted);
+    }
+    .rowWrapper{ margin-bottom:8px; }
+    /* ← 行動と時間の順を入れ替え */
+    .row{
+      display:grid;
+      grid-template-columns:110px 110px 1fr 40px;
+      gap:8px;
+      align-items:center;
+    }
+    .memo{ grid-column:1 / -1; margin-top:6px; }
+    input,textarea{
+      padding:10px;
+      border-radius:8px;
+      border:1px solid #e6e6ee;
+      font-size:14px;
+      width:100%;
+      box-sizing:border-box;
+    }
+    textarea{ resize:vertical; height:70px; }
+    .btn{
+      background:var(--accent);
+      color:#fff;
+      padding:10px 16px;
+      border-radius:8px;
+      border:0;
+      cursor:pointer;
+      font-size:14px;
+    }
+    .btn.ghost{
+      background:transparent;
+      color:var(--accent);
+      border:1px solid rgba(107,91,149,0.3);
+    }
+    #legend div{
+      display:flex;
+      gap:8px;
+      font-size:13px;
+      margin-bottom:4px;
+      flex-wrap:wrap;
+    }
+    .colorbox{ width:14px; height:14px; border-radius:4px; flex-shrink:0; }
+    .add-bottom{ margin-top:10px; }
+    @media(max-width:920px){
+      .grid{grid-template-columns:1fr; gap:12px;}
+      aside.card{width:100%;}
+      canvas{max-width:100% !important; height:auto !important;}
+    }
+    @media(max-width:480px){
+      .wrap{padding:10px; margin:10px;}
+      .row{grid-template-columns:80px 80px 1fr 30px;}
+      .btn{padding:8px 12px; font-size:13px;}
+      input,textarea{font-size:13px; padding:8px;}
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
+<div class="wrap">
+  <h1>バンドメンバー企画 "OFF MODE" <br>　
+    24時間 究極の休日スケジュール入力フォーム</h1>
 
-<h1>アンケート</h1>
+  <div class="card" style="margin-bottom:16px">
+    <label>あなたの名前</label>
+    <input id="username" type="text" placeholder="例：山田太郎">
+  </div>
 
-<form action="https://formspree.io/f/mnpaldkq" method="POST">
+  <div class="grid">
+    <section class="card">
+      <div id="rows"></div>
 
-    <p>Q1. この企画を知っていますか？</p>
+      <div class="add-bottom">
+        <button id="addBtn" class="btn ghost">＋ 項目追加</button>
+      </div>
 
-    <label>
-        <input type="radio" name="knowledge" value="知っている">
-        知っている
-    </label>
+      <div style="margin-top:8px">合計: <strong id="totalHours">0</strong> 時間</div>
+      <div id="error" style="color:red;font-size:13px;margin-top:4px"></div>
 
-    <label>
-        <input type="radio" name="knowledge" value="知らない">
-        知らない
-    </label>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button id="sendBtn" class="btn">送信</button>
+      </div>
+    </section>
 
-    <p>Q2. 感想を教えてください。</p>
+    <aside class="card">
+      <canvas id="pieChart"></canvas>
+      <div id="legend" style="margin-top:10px"></div>
+    </aside>
+  </div>
+</div>
 
-    <textarea name="comment" rows="5" cols="40"></textarea>
+<script>
+const rowsEl = document.getElementById("rows");
+const totalEl = document.getElementById("totalHours");
+let chart = null;
 
-    <br><br>
+function hmToHours(t){ if(!t) return NaN; const [h,m]=t.split(":").map(Number); return h + (m||0)/60; }
+function hoursToHM(h){ const hh = Math.floor(h)%24; const mm = Math.round((h - Math.floor(h))*60); return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
+function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'); }
 
-    <button type="submit">送信</button>
+function createRow(name='', start='00:00', end='01:00', memo=''){
+  const w = document.createElement('div');
+  w.className = 'rowWrapper';
+  w.innerHTML = `
+    <div class="row">
+      <input type="time" step="60" value="${start}">
+      <input type="time" step="60" value="${end}">
+      <input type="text" placeholder="行動" value="${escapeHtml(name)}">
+      <button class="btn ghost">×</button>
+    </div>
+    <div class="memo"><textarea placeholder="詳細">${escapeHtml(memo)}</textarea></div>
+  `;
+  w.querySelector('button').onclick = ()=>{ w.remove(); updateChart(); };
+  w.querySelectorAll('input,textarea').forEach(el => el.addEventListener('input', updateChart));
+  rowsEl.appendChild(w);
+  updateChart();
+}
 
-</form>
+function collect(){
+  const arr = [];
+  document.querySelectorAll('.rowWrapper').forEach(w=>{
+    const times = w.querySelectorAll('input[type=time]');
+    const name = w.querySelector('input[type=text]').value.trim();
+    let sVal = times[0].value; let eVal = times[1].value;
+    const memo = w.querySelector('textarea').value.trim();
+    if(!sVal || !eVal) return;
+    let s = hmToHours(sVal); let e = hmToHours(eVal);
+    if(eVal === '00:00') e = 24;
+    if(e <= s) e = e + 24;
+    const hours = e - s;
+    if(hours>0) arr.push({name:name||'(名称なし)', start:s%24, end:(s+hours)%24, hours, memo, sRaw:sVal, eRaw:eVal});
+  });
+  return arr;
+}
 
+function buildFullDaySegments(items){
+  const intervals = [];
+  items.forEach(it=>{
+    let s = it.sRaw ? hmToHours(it.sRaw) : it.start;
+    let e = it.eRaw ? hmToHours(it.eRaw) : (it.start + it.hours);
+    if(it.eRaw === '00:00') e = 24;
+    if(e <= s){
+      intervals.push({name:it.name,start:s,end:24,memo:it.memo,color:getColor(intervals.length)});
+      intervals.push({name:it.name,start:0,end:(e%24),memo:it.memo,color:getColor(intervals.length)});
+    }else{
+      intervals.push({name:it.name,start:s,end:e,memo:it.memo,color:getColor(intervals.length)});
+    }
+  });
+  intervals.sort((a,b)=>a.start-b.start);
+  const full=[]; let cursor=0;
+  intervals.forEach(it=>{
+    if(it.start>cursor) full.push({name:'未入力',start:cursor,end:it.start,hours:it.start-cursor,memo:'',color:'#e0e0e0'});
+    full.push({name:it.name,start:it.start,end:it.end,hours:it.end-it.start,memo:it.memo,color:it.color});
+    cursor=it.end;
+  });
+  if(cursor<24) full.push({name:'未入力',start:cursor,end:24,hours:24-cursor,memo:'',color:'#e0e0e0'});
+  return full;
+}
+
+function getColor(i){ return `hsl(${(i*47)%360} 70% 55%)`; }
+
+// ↓ ここに置き換える！
+function updateChart(){
+  const data = collect(); // ユーザー入力のみ
+  const segments = buildFullDaySegments(data); // 空き時間含む全セグメント
+
+  const totalUserTime = data.reduce((a,b)=>a+b.hours,0);
+  const errorEl = document.getElementById("error");
+  const totalEl = document.getElementById("totalHours");
+  errorEl.textContent = "";
+
+  // --- 空き時間チェック ---
+  const hasEmpty = segments.some(s => s.name === '未入力');
+  if (hasEmpty) {
+    errorEl.textContent = "⚠ 未入力の時間があります。24時間すべて埋めてください。";
+  }
+
+ // --- 合計時間チェック（空き時間除外） ---
+if (totalUserTime > 24) {
+  errorEl.textContent += (errorEl.textContent ? "／" : "") + "⚠ 合計時間が24時間を超えています";
+}
+
+  totalEl.textContent = totalUserTime.toFixed(2);
+
+  // --- グラフの色設定（空き時間だけグレー） ---
+  const labels = segments.map(s=>s.name);
+  const values = segments.map(s=>s.hours);
+  const colors = segments.map(s => s.name === '未入力' ? '#999' : s.color);
+
+  if(chart) chart.destroy();
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  chart = new Chart(ctx,{
+    type:'pie',
+    data:{labels,datasets:[{data:values,backgroundColor:colors}]},
+    options:{responsive:true,plugins:{legend:{display:false}}}
+  });
+
+  // --- 凡例表示 ---
+  const legend=document.getElementById('legend');
+  legend.innerHTML='';
+  segments.forEach((s,i)=>{
+    const box = document.createElement('span');
+    box.className = 'colorbox';
+    box.style.background = s.name === '未入力' ? '#999' : s.color;
+
+    const row=document.createElement('div');
+    row.appendChild(box);
+    row.innerHTML += ` ${s.start.toFixed(2)}〜${s.end.toFixed(2)} — ${s.name} (${s.hours.toFixed(2)}h)`;
+    legend.appendChild(row);
+  });
+}
+
+
+function addRowAtBottom(){
+  const list=document.querySelectorAll('.rowWrapper');
+  let lastEnd='';
+  if(list.length){
+    const last=list[list.length-1];
+    const endInput=last.querySelectorAll('input[type=time]')[1];
+    lastEnd=endInput?endInput.value:'';
+  }
+  let defaultEnd=lastEnd?hoursToHM(hmToHours(lastEnd)+1):'01:00';
+  createRow('', lastEnd||'00:00', defaultEnd, '');
+}
+
+document.getElementById('addBtn').addEventListener('click', addRowAtBottom);
+
+// メール送信機能（Formspree）
+function makeMailText(){
+  const d=collect();
+  let t="24時間スケジュール\n-----------------------\n";
+  d.forEach(i=>{
+    t+=`${i.sRaw}〜${i.eRaw}：${i.name} (${i.hours.toFixed(2)}h)\n`;
+    if(i.memo) t+=`${i.memo}\n`;
+  });
+  t+=`\n合計: ${d.reduce((a,b)=>a+b.hours,0).toFixed(2)}時間`;
+  return t;
+}
+
+document.getElementById('sendBtn').addEventListener('click', async ()=>{
+  const name=document.getElementById('username').value.trim();
+  const errorEl=document.getElementById('error');
+  const total = parseFloat(document.getElementById('totalHours').textContent);
+
+  // 🚫 エラーが出てるとき送信ストップ
+  if (errorEl.textContent.trim() !== "") {
+    alert("合計時間が24時間ぴったりではありません！");
+    return;
+  }
+
+  // 🚫 名前チェック
+  if(!name){ 
+    alert('名前を入力してください'); 
+    return; 
+  }
+
+  // 🚫 合計が24時間ぴったりでないと送信できない
+  if (Math.abs(total - 24) > 0.01) { // ±0.01 誤差許容
+    alert("合計時間が24時間ぴったりではありません！");
+    return;
+  }
+
+  // ✅ 送信OK
+  const scheduleText=makeMailText();
+  const endpoint="https://formspree.io/f/mnpaldkq";
+  const payload={name:name,schedule:scheduleText};
+  try{
+    await fetch(endpoint,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+    alert("送信しました。ご回答ありがとうございました！");
+  }catch(e){ 
+    alert("送信エラー: "+e); 
+  }
+});
+
+
+// 初期サンプル
+createRow('(例)睡眠','00:00','08:00','(例)休みの日だからと言って長くは寝ずに、いつもの時間に起きるようにしています。');
+createRow('(例)散歩','08:00','09:00','(例)少し歩いたところにある広い公園で軽くストレッチをします。');
+createRow('(例)自由時間','09:00','11:00','(例)趣味の音楽鑑賞や映画鑑賞をします。');
+updateChart();
+
+</script>
 </body>
 </html>
+
+
+
+
+
+
